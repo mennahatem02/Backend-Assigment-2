@@ -6,6 +6,7 @@ const {
   updateUser,
   deleteUser,
 } = require("../controllers/userController");
+const { uploader } = require("../utils/uploaderService");
 
 const router = Router();
 
@@ -13,7 +14,7 @@ router.get("", getUsers);
 
 router.get("/:id", getUserById);
 
-router.post("", createUser);
+router.post("", uploader.single("avatar"), createUser);
 
 router.put("/:id", updateUser);
 

@@ -1,6 +1,8 @@
 const fs = require("fs");
 const path = require("path");
-
+const { createUserSchema , idSchema } = require("../validations/userValidations");
+const { sendMail } = require("../utils/mailService");
+const bcrypt = require("bcrypt");
 let users = [];
 
 const userFilePath = path.join(__dirname, "..", "db", "usersList.json");
@@ -23,7 +25,13 @@ function getUsers(req, res, next) {
 }
 
 function getUserById(req, res, next) {
-  const { id } = req.params;
+  const {error , value}= idSchema.validate(req.params , {abortEarly:false});
+   if (error) {
+    error.status = 400;
+    return next(error);
+  }
+
+  const { id } = value;
   const User = users.find((user) => user.id === Number(id));
   if (!User) {
     const err = new Error("User not found");
@@ -32,15 +40,91 @@ function getUserById(req, res, next) {
   res.send({ message: "User retrieved successfully", data: User });
 }
 
-function createUser(req, res) {
-  const newUser = {
-    id: users.length + 1,
-    ...req.body,
-  };
-  users.push(newUser);
-  fs.writeFileSync(userFilePath, JSON.stringify(users));
-  res.send({ message: "User created successfully", data: newUser });
+// async function createUser(req, res, next) {
+//   try {
+//     const { value, error } = createUserSchema.validate(req.body, { abortEarly: false });
+
+//     if (error) {
+//       error.message = error.details.map(detail => detail.message);
+//       return next(error);
+//     }
+
+//     const newUser = {
+//       id: users.length + 1,
+//       ...value,
+//     };
+
+//     users.push(newUser);
+//     fs.writeFileSync(userFilePath, JSON.stringify(users));
+//      sendMail(
+//       "test@example.com",
+//       "Test email dddddddddddddd",
+//       "This is a test from Nodemailer"
+//     );
+
+//     res.send({ message: "User created successfully", data: newUser });
+
+//   } catch (err) {
+//     console.error("Controller error:", err);
+//     res.status(500).send({ error: err.message });
+//   }
+// }
+
+async function createUser(request, response, next) {
+  try {
+    // Data
+    const { value, error } = createUserSchema.validate(request.body, {
+      abortEarly: false,
+      convert: true,
+    });
+
+    if (error) {
+      const messages = error.details.map((err) => err.message);
+
+      error.message = messages;
+
+      return next(error);
+    }
+
+    const { email, password } = value;
+
+    // Email Unique
+    let user = users.find((item) => item.email == email);
+
+    if (user) {
+      const error = new Error("Email Already Exist!");
+      error.status = 409;
+
+      return next(error);
+    }
+
+    // Hash
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // // Single File
+  const avatar = request.file ? request.file.path : null;
+
+    user = {
+     id: users.length + 1,
+      ...value,
+      password: hashedPassword,
+      avatar: avatar,
+    };
+    users.push(user);
+    fs.writeFileSync(userFilePath, JSON.stringify(users));
+
+    // Send Notification
+   sendMail(email ,`Your account has been created successfully ${user.name}` , "Welcome to the platform",);
+
+    response.status(201).json({ message: "User Create", data: user });
+  } catch (error) {
+    console.log(error);
+    next(error);
+  }
 }
+
+
+
 
 function updateUser(req, res , next) {
   const { id } = req.params;
@@ -56,7 +140,13 @@ function updateUser(req, res , next) {
 }
 
 function deleteUser(req, res, next) {
-  const { id } = req.params;
+  const {error , value}= idSchema.validate(req.params , {abortEarly:false});
+   if (error) {
+    error.status = 400;
+    return next(error);
+  }
+
+  const { id } = value;
   const index = users.findIndex((user) => user.id === Number(id));
   if (index === -1) {
     const err = new Error("User not found");
