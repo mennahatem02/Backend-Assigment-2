@@ -3,6 +3,7 @@ const path = require("path");
 const { createUserSchema , idSchema } = require("../validations/userValidations");
 const { sendMail } = require("../utils/mailService");
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 let users = [];
 
 const userFilePath = path.join(__dirname, "..", "db", "usersList.json");
@@ -115,15 +116,41 @@ async function createUser(request, response, next) {
 
     // Send Notification
    sendMail(email ,`Your account has been created successfully ${user.name}` , "Welcome to the platform",);
+   const payload = { id: user.id, role: user.role };
+   const secret = process.env.JWT_SECRET;
+   const expiresIn = process.env.JWT_EXPIRES_IN || '3h';
 
-    response.status(201).json({ message: "User Create", data: user });
+   const token = jwt.sign(payload , secret , {expiresIn})
+
+    response.status(201).json({ message: "User Create", data: {token} });
   } catch (error) {
     console.log(error);
     next(error);
   }
 }
 
+async function login(req, res, next) {
+  try {
+    const {email , password} = req.body;
+    const user = users.find((item) => item.email == email);
+    if(!user){
+      return res.status(404).json({message: 'User not found'});
+    }
+      const isMatch = await bcrypt.compare(password, user.password);
+      if(!isMatch){
+        return res.status(401).json({message: 'Invalid Credentials'});
+      }
 
+      const payload = { id: user.id, role: user.role };
+      const secret = process.env.JWT_SECRET;
+   const expiresIn = process.env.JWT_EXPIRES_IN || '3h';
+
+   const token = jwt.sign(payload , secret , {expiresIn})
+   res.status(200).json({ message: "Login Successful", data: {token} });
+  } catch (error) {
+    next(error);
+  }
+}
 
 
 function updateUser(req, res , next) {
@@ -163,4 +190,5 @@ module.exports = {
   createUser,
   updateUser,
   deleteUser,
+  login
 };

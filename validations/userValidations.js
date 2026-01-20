@@ -7,6 +7,7 @@ const createUserSchema = joi.object({
     password: joi.string().required(),
     age: joi.number().integer().min(0).optional(),
     salary: joi.number().precision(2).positive().required(),
+    role: joi.string().valid('user', 'admin' , 'manager').required()
 });
 
 
